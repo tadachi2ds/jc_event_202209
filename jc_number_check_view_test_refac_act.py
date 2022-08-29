@@ -1,10 +1,35 @@
 import pygame
 import sys
 import os
+import datetime as dt
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
 # import yaml
 # import argparse
 
+
+
+# GCP 認証関連
+#jsonファイルを使って認証情報を取得
+SCOPES = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+SERVICE_ACCOUNT_FILE = 'doc/tecure-dev-c15385809383.json'
+credentials = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_FILE, SCOPES)
+
+#認証情報を使ってスプレッドシートの操作権を取得
+gs = gspread.authorize(credentials)
+
+#共有したスプレッドシートのキー（後述）を使ってシートの情報を取得
+SPREADSHEET_KEY = '14FvkL75sW2FozNU2ry-dzRzMUvFoA9gVWFhd6-90tUU'
+worksheet = gs.open_by_key(SPREADSHEET_KEY).worksheet('log')
+
 image_dir = ""
+
+# 定数
+RED = (255, 10, 10)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+WAITEING_SEC = 5
 
 def set_parameter() :
     # 最終的には、argparse にする
@@ -14,6 +39,12 @@ def set_parameter() :
         'team_num'  : 16
     }
     return prm
+
+
+
+def next_available_row(sheet):
+    str_list = list(filter(None, sheet.col_values(2)))
+    return str(len(str_list)+1)
 
 
 def load_image(file, width = 0, height = 0):
@@ -52,7 +83,11 @@ def screen_object_setting() :
 
     screen_obj = {
         'bg' : {
-            'img' : load_image("img/N_BackGrand_1920_1080.png")
+            'imgs' : [ 
+                load_image("img/N_BackGrand_1920_1080.png"),
+                load_image("img/N_Win_1920_1080.png"),
+                load_image("img/N_WrongAnswer_1920_1080.png")
+            ]
         },
         'team' : {
             'img'   : {
@@ -87,6 +122,39 @@ def screen_object_setting() :
                     'x' : team_x + team_adg_x,
                     'y' : btn_dwn_y - team_adg_down_y
                 }, 
+            },
+            'name' : {
+                    0 : "",
+                    # 1 : "", # A
+                    # 2 : "", # B
+                    # 3 : "", # C
+                    # 4 : "", # D
+                    # 5 : "", # E
+                    # 6 : "", # F
+                    # 7 : "", # G
+                    # 8 : "", # H
+                    # 9 : "", # I
+                    # 10 : "", # J
+                    # 11 : "", # K
+                    # 12 : "", # L
+                    # 13 : "", # M
+                    # 14 : "", # N
+                    # 15 : "" # O
+                    1 : "A", # A
+                    2 : "B", # B
+                    3 : "C", # C
+                    4 : "D", # D
+                    5 : "E", # E
+                    6 : "F", # F
+                    7 : "G", # G
+                    8 : "H", # H
+                    9 : "I", # I
+                    10 : "J", # J
+                    11 : "K", # K
+                    12 : "L", # L
+                    13 : "M", # M
+                    14 : "N", # N
+                    15 : "O" # O
             }
         },
         'num1' : {
@@ -200,7 +268,7 @@ def screen_object_setting() :
     return screen_obj
 
 
-def screen_object_draw(screen, font, scrn_obj, idx, submit_flg) :
+def screen_object_draw(screen, font, scrn_obj, idx, submit_flg, color ) :
     obj_list = ['team', 'num1', 'num2', 'num3' ]
     scrn_obj_rect = { obj : {'up' : None, 'down' : None}  for obj in obj_list }
     idx_max = {
@@ -210,16 +278,49 @@ def screen_object_draw(screen, font, scrn_obj, idx, submit_flg) :
         'num3' : 10
     }
 
-    if submit_flg :
-        submit_process(screen, scrn_obj, idx)
-        submit_flg = False
-    else :
 
+    if submit_flg :
+
+        print(f"idx['team'] = {idx['team']}")
+        if idx['team'] == 0 :
+            # print(RED)
+            color = RED
+            submit_flg = False
+
+        else :
+            # 脱出成功処理
+            if idx['num1'] == 1 and idx['num2'] == 1 and idx['num3'] == 1 :
+                idx['bg'] = 1
+                print(f"idx['bg'] = {idx['bg']}")
+
+
+                # pygame.mixer.music.play(2)
+                
+                # 【ログ出力】「保険」ローカルファイル
+
+                # 【ログ出力】スプレッドシート処理
+                next_row = next_available_row(worksheet)
+                worksheet.update_cell(next_row, 1, scrn_obj['team']['name'][idx['team']]) # チーム名
+                worksheet.update_cell(next_row, 2, dt.datetime.now().strftime('%H:%M:%S')) #　タイムスタンプ
+
+                idx = { 'bg' : 0, 'team' : 0 , 'num1' : 1, 'num2' : 1, 'num3' : 1  }
+
+            # 脱出しっぱい処理
+            else :
+                idx['bg'] = 2
+
+        # submit_flg = False
 
         # 背景描画
-        screen.blit(scrn_obj['bg']['img'], (0,0))
 
-        # print(scrn_obj_rect )
+        print(f"bg_img = { scrn_obj['bg']['imgs'][idx['bg']] }")
+        screen.blit(scrn_obj['bg']['imgs'][idx['bg']], (0,0))
+            
+    else :
+        color = BLACK
+
+        # 背景描画
+        screen.blit(scrn_obj['bg']['imgs'][idx['bg']], (0,0))
 
         for obj in obj_list :
             # インデックスの調整
@@ -247,28 +348,12 @@ def screen_object_draw(screen, font, scrn_obj, idx, submit_flg) :
         scrn_obj_rect['submit'].topleft = (scrn_obj['submit']['btn']['x'], scrn_obj['submit']['btn']['y'])
 
         # チーム名用の枠
-        pygame.draw.rect(screen, (0,0,0), (280,180,300,600), width = 10)
-        pygame.draw.rect(screen, (0,0,0), (280,130,300,100), width = 0)
-        team_text = font.render("チーム名", True, (255,255,255)) 
+        pygame.draw.rect(screen, color, (280,180,300,600), width = 10)
+        pygame.draw.rect(screen, color, (280,130,300,100), width = 0)
+        team_text = font.render("チーム名", True, WHITE) 
         screen.blit(team_text, [300, 160])
 
-    return scrn_obj_rect, submit_flg
-
-
-def submit_process(screen, scrn_obj, idx) :
-    screen.blit(scrn_obj['submit']['waiting']['img'], (0,0))
-    pygame.time.wait(1000)
-
-
-    if idx['num1'] == 1 and idx['num2'] == 1 and idx['num3'] == 1 :
-        screen.blit(scrn_obj['success']['img'], (0,0))
-        # タイマー ＆ 音
-        pygame.time.wait(3000)
-
-    else :
-        screen.blit(scrn_obj['wrong']['img'], (0,0))
-        # タイマー ＆ 音
-        pygame.time.wait(3000)
+    return scrn_obj_rect, submit_flg, idx, color
 
 
 # ----------------------------------------------------
@@ -288,15 +373,19 @@ def main() :
 
     pygame.mixer.init() #初期化
     pygame.mixer.music.load("img/N_gacya.mp3") #読み込み
+    # pygame.mixer.music.load(["img/N_gacya.mp3", "img/N_gaaaaan.mp3", "img/N_ieeeeei.mp3", "img/N_yattaaaaa.mp3"]) #読み込み
 
     scrn_obj = screen_object_setting()
 
     font = pygame.font.Font('img/CICA-REGULAR.TTF', 60) 
 
-    idx = { 'team' : 1 , 'num1' : 1, 'num2' : 1, 'num3' : 1  }
-    fullscreen_flg = True
+    bg_idx_cnt = 0
+    color = BLACK
+    idx = { 'bg' : 0, 'team' : 0 , 'num1' : 1, 'num2' : 1, 'num3' : 1  }
     submit_flg = False
     running = True
+
+    # メインループ開始
     while running :
         pygame.time.wait(30)
 
@@ -310,14 +399,6 @@ def main() :
                  # ESCキー：終了用のイベント処理
                 if event.key == pygame.K_ESCAPE : 
                     running = False
-
-                if event.key == pygame.K_F2:
-                    # F2キーでフルスクリーンモードへの切り替え
-                    fullscreen_flg = not fullscreen_flg
-                    if fullscreen_flg:
-                        screen = pygame.display.set_mode((width, height), pygame.FULLSCREEN, 32) 
-                    else:
-                        screen = pygame.display.set_mode((width, height), 0, 32) 
 
             # マウスクリックのイベント処理
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -335,11 +416,19 @@ def main() :
                 if scrn_obj_rect['submit'].collidepoint(event.pos):
                     pygame.mixer.music.play(1)
                     submit_flg = True
+                    # 表示をリセットする。
+                    # idx = { 'bg' : 0, 'team' : 0 , 'num1' : 1, 'num2' : 1, 'num3' : 1  }
 
-        scrn_obj_rect, submit_flg = screen_object_draw(screen, font, scrn_obj, idx, submit_flg)
+
+        if submit_flg :
+            bg_idx_cnt += 1
+            if bg_idx_cnt > WAITEING_SEC * 30 :
+                bg_idx_cnt = 0
+                submit_flg = False
+
+        scrn_obj_rect, submit_flg, idx, color = screen_object_draw(screen, font, scrn_obj, idx, submit_flg, color )
 
         # screen.fill((0, 20, 0, 0))
-
 
         pygame.display.update()
 
